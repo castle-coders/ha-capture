@@ -1,0 +1,3 @@
+# Home Assistant Camera Capture
+
+Home assistant camera image capture utility. Use this to capture stills from a camera entity on state change (eg. motion sensor).
