@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import time
-import asyncws
+import websockets
 import asyncio
 import json
 import requests
@@ -10,6 +10,8 @@ import os
 
 # host protocol (https or http)
 http_proto = os.getenv("HTTP_PROTO") or "https"
+# ws protrocol (ws or wss)
+ws_proto = os.getenv("WS_PROTO") or "wss"
 # host name or ip for home assistant
 host = os.getenv("HOST")
 # access token (aka long lived token)
@@ -29,39 +31,38 @@ def ha_url(path):
     return '{}://{}{}'.format(http_proto, host, path)
     
 async def initSocket():
-    websocket = await asyncws.connect('ws://{}/api/websocket'.format(host))
-
-    await websocket.send(json.dumps({'type': 'auth','access_token': token}))
-    await websocket.send(json.dumps({'id': 1, 'type': 'subscribe_events', 'event_type': 'state_changed'}))
+    async with websockets.connect('{}://{}/api/websocket'.format(ws_proto, host)) as websocket:
+        await websocket.send(json.dumps({'type': 'auth','access_token': token}))
+        await websocket.send(json.dumps({'id': 1, 'type': 'subscribe_events', 'event_type': 'state_changed'}))
     
-    print("Start socket...")
+        print("Start socket...")
 
-    while True:
-        message = await websocket.recv()
-        if message is None:
-            break
-        
-        try:   
-            data = json.loads(message)['event']['data']
-            entity_id = data['entity_id']
+        while True:
+            message = await websocket.recv()
+            if message is None:
+                break
             
-            if entity_id == sensor:
-                print("{} new state {}".format(entity_id, data['new_state']['state']))
-                cam_response = requests.get(ha_url('/api/states/{}'.format(camera_entity)), headers=headers)
-                if cam_response.ok:
-                    picture_path = cam_response.json()["attributes"]["entity_picture"]
-                    picture_response = requests.get(ha_url(picture_path), stream=True)
-                    if picture_response.ok:
-                        with open('{}{}{}'.format(output_path, int(time.time()), image_suffix), 'wb') as fp:
-                            picture_response.raw.decode_content = True
-                            shutil.copyfileobj(picture_response.raw, fp)
+            try:   
+                data = json.loads(message)['event']['data']
+                entity_id = data['entity_id']
+                
+                if entity_id == sensor:
+                    print("{} new state {}".format(entity_id, data['new_state']['state']))
+                    cam_response = requests.get(ha_url('/api/states/{}'.format(camera_entity)), headers=headers)
+                    if cam_response.ok:
+                        picture_path = cam_response.json()["attributes"]["entity_picture"]
+                        picture_response = requests.get(ha_url(picture_path), stream=True)
+                        if picture_response.ok:
+                            with open('{}{}{}'.format(output_path, int(time.time()), image_suffix), 'wb') as fp:
+                                picture_response.raw.decode_content = True
+                                shutil.copyfileobj(picture_response.raw, fp)
+                        else:
+                            print(picture_response)
                     else:
-                        print(picture_response)
-                else:
-                    print(cam_response)
-                    
-        except Exception:
-            pass
+                        print(cam_response)
+                        
+            except Exception:
+                pass
 
 async def main(): 
     listen = asyncio.create_task(initSocket()) 
