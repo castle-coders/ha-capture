@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ha-capture
+  labels:
+    app: ha-capture
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ha-capture
+  template:
+    metadata:
+      labels:
+        app: ha-capture
+        name: ha-capture
+    spec:
+      volumes:
+      - name: capture-pv 
+        persistentVolumeClaim:
+          claimName: ha-capture-images-pvc
+      containers:
+      - name: ha-capture 
+        image: docker.local.pw10n.pw/ha-capture:latest
+        imagePullPolicy: Always
+        volumeMounts:
+        - name: capture-pv
+          mountPath: /capture
+        env:
+        - name: HTTP_PROTO
+          value: "http"
+        - name: WS_PROTO
+          value: "ws"
+        - name: HOST
+          value: "home-assistant:8123"
+        - name: TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: ha-capture-token
+              key: password
+        - name: SENSOR
+          value: "binary_sensor.baby_camera_motion_detected"
+        - name: CAMERA 
+          value: "camera.baby_camera"
+        - name: OUTPUT_PATH
+          value: "/capture/"
